@@ -1,4 +1,131 @@
-# Advanced SQL Techniques
+# Complete SQL Guide: From Stored Procedures to Advanced Techniques
+
+## Part I: MySQL Stored Procedures – Beginner Guide
+
+### What is a Stored Procedure?
+A **stored procedure** in MySQL is like a *saved set of SQL steps* in the database. Instead of typing the same query every time, you **store it once** and **call it whenever you need it**.
+
+### Basic Stored Procedure Examples
+
+#### 1. Show All Customers
+```sql
+DELIMITER $$
+CREATE PROCEDURE ShowAllCustomers()
+BEGIN
+    SELECT * FROM customer_info;
+END$$
+DELIMITER ;
+```
+**Run it:**
+```sql
+CALL ShowAllCustomers();
+```
+📌 *This simply lists all customers from the `customer_info` table.*
+
+#### 2. Find Customer by ID (Using Input Parameter)
+```sql
+DELIMITER $$
+CREATE PROCEDURE GetCustomerByID(IN CustID INT)
+BEGIN
+    SELECT * FROM customer_info WHERE customer_id = CustID;
+END$$
+DELIMITER ;
+```
+**Run it:**
+```sql
+CALL GetCustomerByID(1);
+```
+📌 *This shows details for the customer whose ID is `1`.*
+
+#### 3. Show Sales for a Customer
+```sql
+DELIMITER $$
+CREATE PROCEDURE GetSalesByCustomer(IN CustID INT)
+BEGIN
+    SELECT s.sales_id, s.total_sales, p.product_name 
+    FROM sales s 
+    JOIN products p ON s.product_id = p.product_id 
+    WHERE s.customer_id = CustID;
+END$$
+DELIMITER ;
+```
+**Run it:**
+```sql
+CALL GetSalesByCustomer(2);
+```
+📌 *This shows all sales made by customer `2`.*
+
+#### 4. Add a New Customer
+```sql
+DELIMITER $$
+CREATE PROCEDURE AddCustomer(IN Name VARCHAR(120), IN Location VARCHAR(90))
+BEGIN
+    INSERT INTO customer_info(full_name, location) 
+    VALUES(Name, Location);
+END$$
+DELIMITER ;
+```
+**Run it:**
+```sql
+CALL AddCustomer('John Doe', 'Nairobi');
+```
+📌 *This inserts a new customer into the database.*
+
+### Advanced Stored Procedure Examples
+
+#### 5. Procedure with Output Parameter
+```sql
+DELIMITER $$
+CREATE PROCEDURE GetCustomerCount(OUT TotalCustomers INT)
+BEGIN
+    SELECT COUNT(*) INTO TotalCustomers FROM customer_info;
+END$$
+DELIMITER ;
+```
+**Run it:**
+```sql
+CALL GetCustomerCount(@total);
+SELECT @total AS 'Total Customers';
+```
+
+#### 6. Procedure with Conditional Logic
+```sql
+DELIMITER $$
+CREATE PROCEDURE UpdateCustomerStatus(IN CustID INT, IN NewStatus VARCHAR(20))
+BEGIN
+    DECLARE customer_exists INT DEFAULT 0;
+    
+    SELECT COUNT(*) INTO customer_exists 
+    FROM customer_info 
+    WHERE customer_id = CustID;
+    
+    IF customer_exists > 0 THEN
+        UPDATE customer_info 
+        SET status = NewStatus 
+        WHERE customer_id = CustID;
+        SELECT 'Customer status updated successfully' AS Result;
+    ELSE
+        SELECT 'Customer not found' AS Result;
+    END IF;
+END$$
+DELIMITER ;
+```
+
+### Key Notes for Beginners
+- `DELIMITER $$` → Tells MySQL we are writing a block of code until we say `$$`
+- `IN` → Means the procedure expects an input value
+- `OUT` → Means the procedure returns a value
+- `CALL` → Runs the stored procedure
+
+**Primary use cases:**
+1. **View** data easily
+2. **Filter** data based on a value
+3. **Insert** new data
+4. **Join** tables without rewriting big queries
+
+---
+
+## Part II: Advanced SQL Techniques
 
 ## 1. Common Table Expressions (CTEs)
 
@@ -40,15 +167,7 @@ WITH HighEarners AS (
 SELECT * FROM HighEarners ORDER BY salary DESC;
 ```
 
-#### Example 3: Total Sales Over 3000
-```sql
-WITH BigSales AS (
-    SELECT * FROM sales WHERE amount > 3000
-)
-SELECT employee_id, sale_date, amount FROM BigSales;
-```
-
-#### Example 4: Average Salary by Department
+#### Example 3: Average Salary by Department
 ```sql
 WITH AvgDeptSalary AS (
     SELECT department_id, AVG(salary) AS avg_salary
@@ -94,6 +213,21 @@ recent_hires AS (
 SELECT hp.name, hp.performance_score, rh.hire_date
 FROM high_performers hp
 JOIN recent_hires rh ON hp.employee_id = rh.employee_id;
+```
+
+### CTE in Stored Procedures
+```sql
+DELIMITER $$
+CREATE PROCEDURE GetTopPerformers(IN MinScore DECIMAL(3,2))
+BEGIN
+    WITH TopEmployees AS (
+        SELECT employee_id, name, performance_score, department
+        FROM employees
+        WHERE performance_score >= MinScore
+    )
+    SELECT * FROM TopEmployees ORDER BY performance_score DESC;
+END$$
+DELIMITER ;
 ```
 
 ## 2. Window Functions
@@ -173,6 +307,22 @@ SELECT name, salary, department,
 FROM employees;
 ```
 
+### Window Functions in Stored Procedures
+```sql
+DELIMITER $$
+CREATE PROCEDURE GetSalesRanking(IN DeptName VARCHAR(50))
+BEGIN
+    SELECT 
+        name,
+        sales_amount,
+        RANK() OVER (ORDER BY sales_amount DESC) as sales_rank,
+        NTILE(4) OVER (ORDER BY sales_amount DESC) as quartile
+    FROM employees
+    WHERE department = DeptName;
+END$$
+DELIMITER ;
+```
+
 ## 3. Advanced Joins
 
 ### Self Joins
@@ -244,6 +394,23 @@ WHERE NOT EXISTS (
 );
 ```
 
+### Subqueries in Stored Procedures
+```sql
+DELIMITER $$
+CREATE PROCEDURE GetAboveAverageEmployees(IN DeptID INT)
+BEGIN
+    SELECT name, salary
+    FROM employees e1
+    WHERE department_id = DeptID
+    AND salary > (
+        SELECT AVG(salary)
+        FROM employees e2
+        WHERE e2.department_id = DeptID
+    );
+END$$
+DELIMITER ;
+```
+
 ## 5. Advanced Aggregation
 
 ### GROUPING SETS
@@ -286,33 +453,7 @@ FROM employees
 GROUP BY department;
 ```
 
-## 6. Pivot and Unpivot Operations
-
-### PIVOT (SQL Server, Oracle)
-```sql
--- Transform rows to columns
-SELECT *
-FROM (
-    SELECT department, job_title, salary
-    FROM employees
-) AS source
-PIVOT (
-    AVG(salary)
-    FOR job_title IN ([Manager], [Developer], [Analyst])
-) AS pivot_table;
-```
-
-### Manual Pivot (PostgreSQL, MySQL)
-```sql
-SELECT department,
-       AVG(CASE WHEN job_title = 'Manager' THEN salary END) as manager_avg,
-       AVG(CASE WHEN job_title = 'Developer' THEN salary END) as developer_avg,
-       AVG(CASE WHEN job_title = 'Analyst' THEN salary END) as analyst_avg
-FROM employees
-GROUP BY department;
-```
-
-## 7. String Functions and Pattern Matching
+## 6. String Functions and Pattern Matching
 
 ### Advanced String Functions
 ```sql
@@ -339,53 +480,211 @@ SELECT
 FROM products;
 ```
 
-## 8. Date and Time Functions
+### String Functions in Stored Procedures
+```sql
+DELIMITER $$
+CREATE PROCEDURE CleanPhoneNumbers()
+BEGIN
+    UPDATE customers 
+    SET phone = REGEXP_REPLACE(phone, '[^0-9]', '');
+    
+    SELECT COUNT(*) as 'Cleaned Records' FROM customers;
+END$$
+DELIMITER ;
+```
+
+## 7. Date and Time Functions
 
 ### Date Arithmetic
 ```sql
 -- Date calculations
 SELECT 
     order_date,
-    order_date + INTERVAL '30 days' as due_date,
-    AGE(CURRENT_DATE, order_date) as order_age,
-    EXTRACT(DOW FROM order_date) as day_of_week,
-    DATE_TRUNC('month', order_date) as order_month
+    DATE_ADD(order_date, INTERVAL 30 DAY) as due_date,
+    DATEDIFF(CURRENT_DATE, order_date) as days_since_order,
+    DAYOFWEEK(order_date) as day_of_week,
+    DATE_FORMAT(order_date, '%Y-%m') as order_month
 FROM orders;
 ```
 
 ### Time Series Analysis
 ```sql
--- Generate date series
-WITH date_series AS (
-    SELECT generate_series('2023-01-01'::date, '2023-12-31'::date, '1 day'::interval)::date as date
+-- Generate date series (MySQL 8.0+ with recursive CTE)
+WITH RECURSIVE date_series AS (
+    SELECT '2023-01-01' as date
+    UNION ALL
+    SELECT DATE_ADD(date, INTERVAL 1 DAY)
+    FROM date_series
+    WHERE date < '2023-12-31'
 )
 SELECT 
     ds.date,
     COALESCE(SUM(o.amount), 0) as daily_sales
 FROM date_series ds
-LEFT JOIN orders o ON ds.date = o.order_date
+LEFT JOIN orders o ON ds.date = DATE(o.order_date)
 GROUP BY ds.date
 ORDER BY ds.date;
 ```
 
-## 9. JSON and XML Operations
+## 8. JSON Operations (MySQL 5.7+)
 
-### JSON Functions (PostgreSQL, MySQL 8.0+)
+### JSON Functions
 ```sql
 -- Working with JSON data
 SELECT 
     user_id,
-    preferences->>'theme' as theme_preference,
-    JSON_ARRAY_LENGTH(preferences->'notifications') as notification_count,
-    JSON_EXTRACT_PATH_TEXT(profile, 'address', 'city') as city
+    JSON_EXTRACT(preferences, '$.theme') as theme_preference,
+    JSON_LENGTH(JSON_EXTRACT(preferences, '$.notifications')) as notification_count,
+    JSON_EXTRACT(profile, '$.address.city') as city
 FROM users
-WHERE preferences->>'language' = 'en';
+WHERE JSON_EXTRACT(preferences, '$.language') = 'en';
 
 -- JSON aggregation
 SELECT 
     department,
-    JSON_AGG(
-        JSON_BUILD_OBJECT(
+    JSON_ARRAYAGG(
+        JSON_OBJECT(
             'name', name,
             'salary', salary,
-            'hire_date
+            'hire_date', hire_date
+        )
+    ) as employees_json
+FROM employees
+GROUP BY department;
+```
+
+### JSON in Stored Procedures
+```sql
+DELIMITER $$
+CREATE PROCEDURE GetUserPreferences(IN UserID INT)
+BEGIN
+    SELECT 
+        user_id,
+        JSON_PRETTY(preferences) as formatted_preferences
+    FROM users
+    WHERE user_id = UserID;
+END$$
+DELIMITER ;
+```
+
+## 9. Combining Techniques: Advanced Stored Procedures
+
+### Comprehensive Sales Report Procedure
+```sql
+DELIMITER $$
+CREATE PROCEDURE GenerateSalesReport(
+    IN StartDate DATE,
+    IN EndDate DATE,
+    IN DepartmentFilter VARCHAR(50)
+)
+BEGIN
+    -- Declare variables
+    DECLARE total_sales DECIMAL(15,2) DEFAULT 0;
+    DECLARE avg_sale DECIMAL(10,2) DEFAULT 0;
+    
+    -- Main report with multiple advanced techniques
+    WITH 
+    sales_data AS (
+        SELECT 
+            e.department,
+            e.name as employee_name,
+            s.sale_date,
+            s.amount,
+            ROW_NUMBER() OVER (PARTITION BY e.department ORDER BY s.amount DESC) as dept_rank
+        FROM sales s
+        JOIN employees e ON s.employee_id = e.employee_id
+        WHERE s.sale_date BETWEEN StartDate AND EndDate
+        AND (DepartmentFilter IS NULL OR e.department = DepartmentFilter)
+    ),
+    department_totals AS (
+        SELECT 
+            department,
+            SUM(amount) as dept_total,
+            AVG(amount) as dept_avg,
+            COUNT(*) as sale_count
+        FROM sales_data
+        GROUP BY department
+    )
+    SELECT 
+        sd.department,
+        sd.employee_name,
+        sd.amount,
+        sd.dept_rank,
+        dt.dept_total,
+        dt.dept_avg,
+        ROUND((sd.amount / dt.dept_total) * 100, 2) as pct_of_dept_sales
+    FROM sales_data sd
+    JOIN department_totals dt ON sd.department = dt.department
+    ORDER BY sd.department, sd.dept_rank;
+    
+    -- Summary statistics
+    SELECT 
+        SUM(amount) INTO total_sales
+    FROM sales s
+    JOIN employees e ON s.employee_id = e.employee_id
+    WHERE s.sale_date BETWEEN StartDate AND EndDate
+    AND (DepartmentFilter IS NULL OR e.department = DepartmentFilter);
+    
+    SELECT CONCAT('Total Sales: $', FORMAT(total_sales, 2)) as Summary;
+    
+END$$
+DELIMITER ;
+```
+
+### Dynamic Query Building Procedure
+```sql
+DELIMITER $$
+CREATE PROCEDURE DynamicEmployeeSearch(
+    IN SearchName VARCHAR(100),
+    IN MinSalary DECIMAL(10,2),
+    IN Department VARCHAR(50),
+    IN SortBy VARCHAR(20)
+)
+BEGIN
+    SET @sql = 'SELECT employee_id, name, salary, department, hire_date FROM employees WHERE 1=1';
+    
+    IF SearchName IS NOT NULL THEN
+        SET @sql = CONCAT(@sql, ' AND name LIKE ''%', SearchName, '%''');
+    END IF;
+    
+    IF MinSalary IS NOT NULL THEN
+        SET @sql = CONCAT(@sql, ' AND salary >= ', MinSalary);
+    END IF;
+    
+    IF Department IS NOT NULL THEN
+        SET @sql = CONCAT(@sql, ' AND department = ''', Department, '''');
+    END IF;
+    
+    CASE SortBy
+        WHEN 'name' THEN SET @sql = CONCAT(@sql, ' ORDER BY name');
+        WHEN 'salary' THEN SET @sql = CONCAT(@sql, ' ORDER BY salary DESC');
+        WHEN 'hire_date' THEN SET @sql = CONCAT(@sql, ' ORDER BY hire_date DESC');
+        ELSE SET @sql = CONCAT(@sql, ' ORDER BY employee_id');
+    END CASE;
+    
+    PREPARE stmt FROM @sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+END$$
+DELIMITER ;
+```
+
+## Best Practices Summary
+
+### For Stored Procedures:
+1. Use meaningful parameter names with proper prefixes (IN/OUT/INOUT)
+2. Include error handling with DECLARE ... HANDLER
+3. Add comments to explain complex logic
+4. Use transactions for data modifications
+5. Validate input parameters
+
+### For Advanced SQL:
+1. Use CTEs for complex queries to improve readability
+2. Choose appropriate window functions for analytical queries
+3. Optimize joins by understanding execution plans
+4. Use EXISTS instead of IN for better performance
+5. Consider indexing strategies for complex queries
+
+### General Tips:
+1. Test procedures thoroughly with edge cases
+2. Use consistent naming conventions
